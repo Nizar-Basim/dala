@@ -1,0 +1,157 @@
+%{
+#include "y.tab.h"
+%}
+
+%%
+
+[0-9]+          { yylval.num = atoi(yytext); return NUMBER; }
+[-+*/=()]       { return yytext[0]; }
+[a-zA-Z][a-zA-Z0-9]*    { yylval.str = strdup(yytext); return IDENTIFIER; }
+[ \t\n]         ; /* skip whitespace */
+.               ;
+
+%%
+
+int yywrap(void) {
+    return 1;
+}
+
+
+
+
+
+
+
+
+
+
+%{
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+int yyerror(const char *msg);
+extern FILE *yyin;
+
+typedef struct {
+    int is_temporary;
+    char* name;
+} Operand;
+
+typedef struct {
+    char* op;
+    Operand* result;
+    Operand* arg1;
+    Operand* arg2;
+} Instruction;
+
+void emit(char* op, Operand* result, Operand* arg1, Operand* arg2);
+Operand* new_temporary();
+Operand* new_operand(char* name);
+
+int temp_counter = 0;
+
+%}
+
+%union {
+    int num;
+    char* str;
+}
+
+%token <num> NUMBER
+%token <str> IDENTIFIER
+
+%type <str> expr term factor
+
+%start program
+
+%%
+
+program: /* empty */
+       | program '\n' { printf("Translation Complete.\n"); }
+       | program expr '\n' { printf("Expression Result: %s\n", $2); }
+       ;
+
+expr:   term    { $$ = $1; }
+       | expr '+' term {
+           Operand* temp = new_temporary();
+           emit("+", temp, $1, $3);
+           $$ = temp->name;
+         }
+       | expr '-' term {
+           Operand* temp = new_temporary();
+           emit("-", temp, $1, $3);
+           $$ = temp->name;
+         }
+       ;
+
+term:   factor  { $$ = $1; }
+       | term '*' factor {
+           Operand* temp = new_temporary();
+           emit("*", temp, $1, $3);
+           $$ = temp->name;
+         }
+       | term '/' factor {
+           Operand* temp = new_temporary();
+           emit("/", temp, $1, $3);
+           $$ = temp->name;
+         }
+       ;
+
+factor: NUMBER {
+           Operand* temp = new_operand(strdup(yytext));
+           $$ = temp->name;
+         }
+       | IDENTIFIER {
+           Operand* temp = new_operand($1);
+           $$ = temp->name;
+         }
+       | '(' expr ')' {
+           $$ = $2;
+         }
+       ;
+
+%%
+
+int main(int argc, char *argv[]) {
+    if (argc < 2) {
+        fprintf(stderr, "Usage: %s <input_file>\n", argv[0]);
+        return 1;
+    }
+
+    FILE *fp = fopen(argv[1], "r");
+    if (fp == NULL) {
+        perror("Error opening file");
+        return 1;
+    }
+
+    yyin = fp;
+    yyparse();
+    fclose(fp);
+    return 0;
+}
+
+int yyerror(const char *msg) {
+    fprintf(stderr, "Error: %s\n", msg);
+    return 1;
+}
+
+void emit(char* op, Operand* result, Operand* arg1, Operand* arg2) {
+    printf("%s := %s %s %s\n", result->name, arg1->name, op, arg2->name);
+}
+
+Operand* new_temporary() {
+    Operand* temp = (Operand*)malloc(sizeof(Operand));
+    temp->is_temporary = 1;
+    char name[10];
+    sprintf(name, "t%d", temp_counter++);
+    temp->name = strdup(name);
+    return temp;
+}
+
+Operand* new_operand(char* name) {
+    Operand* op = (Operand*)malloc(sizeof(Operand));
+    op->is_temporary = 0;
+    op->name = name;
+    return op;
+}
