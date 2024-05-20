@@ -23,7 +23,7 @@ void count_word() {
 
 int main() {
 
-    printf("Enter text (Ctrl+D to end input on Unix, Ctrl+Z on Windows):\n");
+    printf("Enter text :\n");
 
 
     yylex();
